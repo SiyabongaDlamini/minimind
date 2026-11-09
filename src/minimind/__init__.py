@@ -18,7 +18,7 @@ from .optim import SGD, Adam, AdamW, CosineAnnealingLR, LRScheduler, StepLR
 from .parsers import ImageParser, load_csv, load_image_folder
 from .vlm import MultimodalMatch, VisionLanguageModel
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "GELU",

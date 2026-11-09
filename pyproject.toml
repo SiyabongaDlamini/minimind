@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "minimind"
-version = "0.2.0"
+version = "0.3.0"
 description = "Lightweight Vision-Language Model, Multimodal Search, and Neural Network Engine in pure NumPy."
 readme = "README.md"
 license = { text = "MIT" }

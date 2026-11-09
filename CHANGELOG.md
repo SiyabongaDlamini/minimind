@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.3.0] - 2026-11-09
+
+### Added
+- **New Activations (`SiLU`, `LeakyReLU`)**: Analytical forward and backward implementations in `minimind.layers` and CLI (`--activation silu|leaky_relu`).
+- **Label Smoothing (`SoftmaxCrossEntropy`)**: Configurable `label_smoothing` support in `SoftmaxCrossEntropy` and `NeuralNetwork`.
+- **Learning Rate Schedulers (`CosineAnnealingLR`, `StepLR`)**: Built-in LR scheduling (`lr_schedule="cosine"|"step"`) and validation-based early stopping (`patience`) with best-parameter restoration in `NeuralNetwork.fit()`.
+
+### Fixed
+- **Full Model Persistence**: `NeuralNetwork.save()` and `NeuralNetwork.load()` now persist `LayerNorm` (`gamma`, `beta`), `dropout`, and `label_smoothing` configuration alongside dense weights.
+
 ## [v0.2.0] - 2026-11-09
 
 ### Added

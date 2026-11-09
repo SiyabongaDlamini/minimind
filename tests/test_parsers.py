@@ -4,7 +4,7 @@ import pytest
 pytest.importorskip("PIL")
 from PIL import Image, ImageDraw  # noqa: E402
 
-from neuronet import ImageParser, load_csv, load_image_folder  # noqa: E402
+from minimind import ImageParser, load_csv, load_image_folder  # noqa: E402
 
 
 def make_image(path, shape="square", ink=0, paper=255, size=64):
@@ -63,7 +63,7 @@ def test_image_folder_trains_a_classifier(tmp_path):
     assert data.class_names == ("ellipse", "square")
     assert len(data) == 24 and data.image_shape == (12, 12)
 
-    from neuronet import NeuralNetwork
+    from minimind import NeuralNetwork
 
     train, test = data.split(test_size=0.25)
     net = NeuralNetwork([144, 16, 2], seed=0)

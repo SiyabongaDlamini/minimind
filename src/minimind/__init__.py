@@ -1,4 +1,4 @@
-"""Neuronet: a small, readable neural network in pure NumPy."""
+"""Minimind: a small, readable neural network in pure NumPy."""
 
 from .data import Dataset, Standardizer
 from .knowledge import Answer, KnowledgeBase

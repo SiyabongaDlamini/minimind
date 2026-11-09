@@ -116,7 +116,7 @@ class NeuralNetwork:
             y: Integer class labels, shape ``(n_samples,)``.
             epochs: Number of passes over the data.
             batch_size: Mini-batch size.
-            optimizer: ``'adam'``, ``'sgd'`` or an :class:`~neuronet.optim.Optimizer`.
+            optimizer: ``'adam'``, ``'sgd'`` or an :class:`~minimind.optim.Optimizer`.
             lr: Learning rate when ``optimizer`` is given by name.
             validation: Optional ``(X_val, y_val)`` evaluated after every epoch.
             shuffle: Reshuffle the training data every epoch.

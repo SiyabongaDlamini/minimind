@@ -58,7 +58,7 @@ def animate_training(
     probe_label: str | None = None,
     image_shape: tuple[int, int] | None = None,
     class_names: Sequence[str] | None = None,
-    title: str = "Neuronet",
+    title: str = "Minimind",
     save_path: str | Path | None = None,
     fps: int = 12,
     max_nodes: int = 16,

@@ -2,8 +2,8 @@ import zipfile
 
 import pytest
 
-from neuronet import KnowledgeBase
-from neuronet.knowledge import chunk_text, read_document, tokenize
+from minimind import KnowledgeBase
+from minimind.knowledge import chunk_text, read_document, tokenize
 
 POLICY = """
 Employees must give 30 days of written notice before resigning. The notice period

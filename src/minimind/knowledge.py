@@ -77,7 +77,7 @@ def _read_pdf(path: Path) -> str:
     try:
         from pypdf import PdfReader
     except ImportError as exc:
-        raise ImportError("reading PDFs needs pypdf: pip install 'neuronet[docs]'") from exc
+        raise ImportError("reading PDFs needs pypdf: pip install 'minimind[docs]'") from exc
     pages = [(page.extract_text() or "") for page in PdfReader(str(path)).pages]
     text = "\n\n".join(pages).strip()
     if not text:

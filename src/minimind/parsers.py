@@ -1,4 +1,4 @@
-"""Parsers that turn images and tabular files into :class:`~neuronet.data.Dataset` rows.
+"""Parsers that turn images and tabular files into :class:`~minimind.data.Dataset` rows.
 
 The image parser is built for scans and photos of documents: it converts to
 grayscale, flips dark-ink-on-light-paper into the bright-ink convention used by
@@ -26,7 +26,7 @@ def _pil():
     try:
         from PIL import Image
     except ImportError as exc:  # pragma: no cover
-        raise ImportError("image parsing needs Pillow: pip install 'neuronet[image]'") from exc
+        raise ImportError("image parsing needs Pillow: pip install 'minimind[image]'") from exc
     return Image
 
 

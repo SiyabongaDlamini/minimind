@@ -1,4 +1,4 @@
-"""Command line interface: ``neuronet train | predict | ask | ui``."""
+"""Command line interface: ``minimind demo | train | predict | ask``."""
 
 from __future__ import annotations
 
@@ -81,6 +81,16 @@ def _train_and_report(
     return net
 
 
+def _cmd_demo(args: argparse.Namespace) -> int:
+    from .datasets import load_digits
+
+    net = _train_and_report(load_digits(), [32], args, {}, animate=args.animate)
+    if args.out:
+        net.save(args.out)
+        print(f"model saved to {args.out}")
+    return 0
+
+
 def _cmd_train(args: argparse.Namespace) -> int:
     from .parsers import ImageParser, load_csv, load_image_folder
 
@@ -149,20 +159,9 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_ui(args: argparse.Namespace) -> int:
-    try:
-        import uvicorn
-    except ImportError:
-        print("UI requires uvicorn and fastapi: pip install uvicorn fastapi python-multipart", file=sys.stderr)
-        return 1
-    print(f"Starting Neuronet Control Console on http://{args.host}:{args.port}")
-    uvicorn.run("neuronet.ui:app", host=args.host, port=args.port, log_level="info")
-    return 0
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="neuronet", description="A small NumPy neural network with parsers and animations."
+        prog="minimind", description="A small NumPy neural network with parsers and animations."
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -176,6 +175,11 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--seed", type=int, default=0)
         p.add_argument("--animate", metavar="FILE.gif", help="save a training animation")
         p.add_argument("--animate-every", type=int, default=2, help="epochs per animation frame")
+
+    demo = sub.add_parser("demo", help="train on the built-in digits dataset")
+    add_training_options(demo)
+    demo.add_argument("--out", help="save the trained model (.npz)")
+    demo.set_defaults(func=_cmd_demo)
 
     train = sub.add_parser("train", help="train on your own images or CSV")
     source = train.add_mutually_exclusive_group(required=True)
@@ -198,11 +202,6 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("documents", nargs="+", help="files or folders (txt, md, docx, pdf, ...)")
     ask.add_argument("-q", "--question", help="ask once instead of starting a prompt")
     ask.set_defaults(func=_cmd_ask)
-
-    ui = sub.add_parser("ui", help="launch black visualizer console")
-    ui.add_argument("--host", default="127.0.0.1", help="host to bind (default: 127.0.0.1)")
-    ui.add_argument("--port", type=int, default=8000, help="port to bind (default: 8000)")
-    ui.set_defaults(func=_cmd_ui)
     return parser
 
 

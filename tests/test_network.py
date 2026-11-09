@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from neuronet import NeuralNetwork
-from neuronet.losses import SoftmaxCrossEntropy, softmax
+from minimind import NeuralNetwork
+from minimind.losses import SoftmaxCrossEntropy, softmax
 
 
 def test_softmax_rows_sum_to_one_and_are_stable():

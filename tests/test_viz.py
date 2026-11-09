@@ -6,8 +6,8 @@ import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 
-from neuronet import NeuralNetwork  # noqa: E402
-from neuronet.viz import TrainingRecorder, animate_training  # noqa: E402
+from minimind import NeuralNetwork  # noqa: E402
+from minimind.viz import TrainingRecorder, animate_training  # noqa: E402
 
 
 def test_animation_is_written_and_weights_restored(tmp_path):

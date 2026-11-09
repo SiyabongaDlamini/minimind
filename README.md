@@ -1,4 +1,4 @@
-# Neuronet
+# Minimind
 
 A small, readable neural network in **pure NumPy** — with parsers that turn images and
 CSV files into training data, a live **matplotlib animation** of the network learning, and
@@ -20,43 +20,41 @@ afternoon.
 - **Animation** — watch weights, neuron activations, output probabilities and the loss curve
   evolve, and export to GIF.
 - **Ask your documents** — index `.txt`, `.md`, `.docx`, `.pdf`, `.csv` files and get answers
-  with the sources they came from (`KnowledgeBase`, `neuronet ask`).
+  with the sources they came from (`KnowledgeBase`, `minimind ask`).
 - **Tested** — numerical gradient checks, learning tests, parser and Q&A tests, CI on
   Python 3.10–3.13.
 
 ## Install
 
 ```bash
-git clone <your-repo-url> && cd neuronet
+git clone <your-repo-url> && cd minimind
 pip install -e ".[all]"        # everything
-# or pick extras:  .[image]  .[viz]  .[docs]  .[dev]
+# or pick extras:  .[image]  .[viz]  .[docs]  .[demo]  .[dev]
 ```
 
 The core library only needs NumPy.
 
 ## Quick start
 
-```bash
-# Train on your own CSV file with a header row and target column:
-neuronet train --csv data/dataset.csv --target label --epochs 60 --out model.npz
-```
-
-Or from Python:
-
 ```python
-from neuronet import NeuralNetwork, load_csv, Standardizer, Dataset
+from minimind import NeuralNetwork
+from minimind.datasets import load_digits
 
-data = load_csv("data/dataset.csv", target="label")
-scaler = Standardizer().fit(data.X)
-data = Dataset(scaler.transform(data.X), data.y, data.class_names)
+data = load_digits()                      # 8x8 handwritten digits
 train, test = data.split(test_size=0.2)
 
-net = NeuralNetwork([data.n_features, 32, data.n_classes], activation="relu")
+net = NeuralNetwork([64, 32, 10], activation="relu")
 net.fit(train.X, train.y, epochs=60, batch_size=32, validation=(test.X, test.y), verbose=10)
 
 loss, accuracy = net.evaluate(test.X, test.y)
 print(f"test accuracy: {accuracy:.1%}")
-net.save("model.npz")
+net.save("digits.npz")
+```
+
+Or from the command line:
+
+```bash
+minimind demo --epochs 60 --animate docs/demo.gif
 ```
 
 ## Train on your own images
@@ -70,9 +68,9 @@ my_data/
 ```
 
 ```bash
-neuronet train --images my_data --size 16x16 --hidden 64,32 --epochs 80 \
+minimind train --images my_data --size 16x16 --hidden 64,32 --epochs 80 \
                --out model.npz --animate training.gif
-neuronet predict model.npz some_new_photo.jpg
+minimind predict model.npz some_new_photo.jpg
 ```
 
 `ImageParser` handles the messy parts of real scans: transparency, colour → grayscale,
@@ -80,21 +78,21 @@ dark-ink-on-white-paper → bright-ink convention, contrast stretching, cropping
 content and resizing to a fixed shape.
 
 ```python
-from neuronet import ImageParser
+from minimind import ImageParser
 vector = ImageParser(size=(28, 28)).parse("scan.png")   # flat float vector in [0, 1]
 ```
 
-CSV works the same way (`neuronet train --csv data.csv --target label`).
+CSV works the same way (`minimind train --csv data.csv --target label`).
 
 ## Ask your documents
 
 ```bash
-neuronet ask reports/ notes.md contract.pdf -q "What is the notice period?"
-neuronet ask reports/            # interactive prompt
+minimind ask reports/ notes.md contract.pdf -q "What is the notice period?"
+minimind ask reports/            # interactive prompt
 ```
 
 ```python
-from neuronet import KnowledgeBase
+from minimind import KnowledgeBase
 
 kb = KnowledgeBase()
 kb.add_paths(["reports/", "notes.md"])
@@ -111,7 +109,7 @@ layer, so run OCR (for example Tesseract) first and add the resulting text.
 ## Project layout
 
 ```
-src/neuronet/
+src/minimind/
 ├── layers.py      Dense, ReLU, Tanh, Sigmoid (forward + backward)
 ├── losses.py      softmax, SoftmaxCrossEntropy
 ├── optim.py       SGD, Adam
@@ -120,7 +118,8 @@ src/neuronet/
 ├── parsers.py     ImageParser, load_image_folder, load_csv
 ├── knowledge.py   KnowledgeBase: document ingestion and question answering
 ├── viz.py         TrainingRecorder, animate_training
-└── cli.py         neuronet train | predict | ask
+├── datasets.py    built-in digits dataset
+└── cli.py         minimind demo | train | predict | ask
 tests/             pytest suite (includes numerical gradient checks)
 ```
 

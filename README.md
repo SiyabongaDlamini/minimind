@@ -29,32 +29,34 @@ afternoon.
 ```bash
 git clone <your-repo-url> && cd neuronet
 pip install -e ".[all]"        # everything
-# or pick extras:  .[image]  .[viz]  .[docs]  .[demo]  .[dev]
+# or pick extras:  .[image]  .[viz]  .[docs]  .[dev]
 ```
 
 The core library only needs NumPy.
 
 ## Quick start
 
-```python
-from neuronet import NeuralNetwork
-from neuronet.datasets import load_digits
+```bash
+# Train on your own CSV file with a header row and target column:
+neuronet train --csv data/dataset.csv --target label --epochs 60 --out model.npz
+```
 
-data = load_digits()                      # 8x8 handwritten digits
+Or from Python:
+
+```python
+from neuronet import NeuralNetwork, load_csv, Standardizer, Dataset
+
+data = load_csv("data/dataset.csv", target="label")
+scaler = Standardizer().fit(data.X)
+data = Dataset(scaler.transform(data.X), data.y, data.class_names)
 train, test = data.split(test_size=0.2)
 
-net = NeuralNetwork([64, 32, 10], activation="relu")
+net = NeuralNetwork([data.n_features, 32, data.n_classes], activation="relu")
 net.fit(train.X, train.y, epochs=60, batch_size=32, validation=(test.X, test.y), verbose=10)
 
 loss, accuracy = net.evaluate(test.X, test.y)
 print(f"test accuracy: {accuracy:.1%}")
-net.save("digits.npz")
-```
-
-Or from the command line:
-
-```bash
-neuronet demo --epochs 60 --animate docs/demo.gif
+net.save("model.npz")
 ```
 
 ## Train on your own images
@@ -118,8 +120,7 @@ src/neuronet/
 ├── parsers.py     ImageParser, load_image_folder, load_csv
 ├── knowledge.py   KnowledgeBase: document ingestion and question answering
 ├── viz.py         TrainingRecorder, animate_training
-├── datasets.py    built-in digits dataset
-└── cli.py         neuronet demo | train | predict | ask
+└── cli.py         neuronet train | predict | ask
 tests/             pytest suite (includes numerical gradient checks)
 ```
 

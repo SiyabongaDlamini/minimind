@@ -1,4 +1,4 @@
-"""Command line interface: ``neuronet demo | train | predict | ask``."""
+"""Command line interface: ``neuronet train | predict | ask``."""
 
 from __future__ import annotations
 
@@ -79,16 +79,6 @@ def _train_and_report(
         )
         print(f"animation saved to {animate}")
     return net
-
-
-def _cmd_demo(args: argparse.Namespace) -> int:
-    from .datasets import load_digits
-
-    net = _train_and_report(load_digits(), [32], args, {}, animate=args.animate)
-    if args.out:
-        net.save(args.out)
-        print(f"model saved to {args.out}")
-    return 0
 
 
 def _cmd_train(args: argparse.Namespace) -> int:
@@ -175,11 +165,6 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--seed", type=int, default=0)
         p.add_argument("--animate", metavar="FILE.gif", help="save a training animation")
         p.add_argument("--animate-every", type=int, default=2, help="epochs per animation frame")
-
-    demo = sub.add_parser("demo", help="train on the built-in digits dataset")
-    add_training_options(demo)
-    demo.add_argument("--out", help="save the trained model (.npz)")
-    demo.set_defaults(func=_cmd_demo)
 
     train = sub.add_parser("train", help="train on your own images or CSV")
     source = train.add_mutually_exclusive_group(required=True)

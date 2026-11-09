@@ -172,6 +172,42 @@ class Sigmoid(Layer):
         return grad * self._out * (1.0 - self._out)
 
 
+class SiLU(Layer):
+    def __init__(self) -> None:
+        self._x: Array | None = None
+        self._sig: Array | None = None
+
+    def forward(self, x: Array, training: bool = True) -> Array:
+        sig = np.empty_like(x, dtype=float)
+        pos = x >= 0
+        sig[pos] = 1.0 / (1.0 + np.exp(-x[pos]))
+        ex = np.exp(x[~pos])
+        sig[~pos] = ex / (1.0 + ex)
+        self._x = x
+        self._sig = sig
+        return x * sig
+
+    def backward(self, grad: Array) -> Array:
+        if self._x is None or self._sig is None:
+            raise RuntimeError("backward() called before forward()")
+        return grad * (self._sig * (1.0 + self._x * (1.0 - self._sig)))
+
+
+class LeakyReLU(Layer):
+    def __init__(self, alpha: float = 0.01) -> None:
+        self.alpha = alpha
+        self._mask: Array | None = None
+
+    def forward(self, x: Array, training: bool = True) -> Array:
+        self._mask = x > 0
+        return np.where(self._mask, x, self.alpha * x)
+
+    def backward(self, grad: Array) -> Array:
+        if self._mask is None:
+            raise RuntimeError("backward() called before forward()")
+        return grad * np.where(self._mask, 1.0, self.alpha)
+
+
 class MultiHeadAttention(Layer):
     def __init__(self, d_model: int, n_heads: int, rng: np.random.Generator) -> None:
         if d_model % n_heads != 0:
@@ -233,7 +269,9 @@ class MultiHeadAttention(Layer):
 
 ACTIVATIONS: dict[str, type[Layer]] = {
     "relu": ReLU,
+    "leaky_relu": LeakyReLU,
     "gelu": GELU,
+    "silu": SiLU,
     "tanh": Tanh,
     "sigmoid": Sigmoid,
 }

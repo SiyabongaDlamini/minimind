@@ -205,7 +205,11 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--epochs", type=int, default=60)
         p.add_argument("--lr", type=float, default=0.01)
         p.add_argument("--batch-size", type=int, default=32)
-        p.add_argument("--activation", choices=["relu", "gelu", "tanh", "sigmoid"], default="relu")
+        p.add_argument(
+            "--activation",
+            choices=["relu", "leaky_relu", "gelu", "silu", "tanh", "sigmoid"],
+            default="relu",
+        )
         p.add_argument("--test-size", type=float, default=0.2)
         p.add_argument("--seed", type=int, default=0)
         p.add_argument("--animate", metavar="FILE.gif", help="save a training animation")

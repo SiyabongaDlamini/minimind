@@ -1,4 +1,4 @@
-"""Command line interface: ``neuronet train | predict | ask``."""
+"""Command line interface: ``neuronet train | predict | ask | ui``."""
 
 from __future__ import annotations
 
@@ -149,6 +149,17 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ui(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print("UI requires uvicorn and fastapi: pip install uvicorn fastapi python-multipart", file=sys.stderr)
+        return 1
+    print(f"Starting Neuronet Control Console on http://{args.host}:{args.port}")
+    uvicorn.run("neuronet.ui:app", host=args.host, port=args.port, log_level="info")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="neuronet", description="A small NumPy neural network with parsers and animations."
@@ -187,6 +198,11 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("documents", nargs="+", help="files or folders (txt, md, docx, pdf, ...)")
     ask.add_argument("-q", "--question", help="ask once instead of starting a prompt")
     ask.set_defaults(func=_cmd_ask)
+
+    ui = sub.add_parser("ui", help="launch black visualizer console")
+    ui.add_argument("--host", default="127.0.0.1", help="host to bind (default: 127.0.0.1)")
+    ui.add_argument("--port", type=int, default=8000, help="port to bind (default: 8000)")
+    ui.set_defaults(func=_cmd_ui)
     return parser
 
 

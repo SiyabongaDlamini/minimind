@@ -4,9 +4,10 @@
 
 **A Lightweight Vision-Language Model, Multimodal Search & Neural Engine in Pure NumPy**
 
+[![CI](https://github.com/SiyabongaDlamini/minimind/actions/workflows/ci.yml/badge.svg)](https://github.com/SiyabongaDlamini/minimind/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/SiyabongaDlamini/minimind?include_prereleases&color=2ea043)](https://github.com/SiyabongaDlamini/minimind/releases)
 [![Python 3.10–3.13](https://img.shields.io/badge/python-3.10%E2%80%933.13-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![Core Dependency](https://img.shields.io/badge/core-Pure%20NumPy-013243?logo=numpy&logoColor=white)](https://numpy.org/)
-[![Tests](https://img.shields.io/badge/tests-33%20passed-2ea043)](tests/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 *Train vision-language models, run zero-shot image classification via natural language prompts, index documents for retrieval, and visualize neural network dynamics—without gigabyte deep-learning frameworks.*

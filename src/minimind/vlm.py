@@ -455,3 +455,4 @@ class VisionLanguageModel:
             f"VisionLanguageModel(image={h}x{w}, hidden={self.hidden_dim}, "
             f"embed={self.embed_dim})"
         )
+

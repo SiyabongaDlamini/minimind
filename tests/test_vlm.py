@@ -107,3 +107,4 @@ def test_vlm_training_zero_shot_and_persistence(tmp_path):
     loaded = VisionLanguageModel.load(save_file)
     assert np.allclose(vlm.encode_image(test_img), loaded.encode_image(test_img))
     assert np.allclose(vlm.encode_text("square shape"), loaded.encode_text("square shape"))
+

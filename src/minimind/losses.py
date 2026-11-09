@@ -23,22 +23,36 @@ def l2_normalize_backward(grad_normed: Array, normed: Array, norms: Array) -> Ar
 
 
 class SoftmaxCrossEntropy:
-    def __init__(self) -> None:
+    def __init__(self, label_smoothing: float = 0.0) -> None:
+        if not 0.0 <= label_smoothing < 1.0:
+            raise ValueError("label_smoothing must be in [0, 1)")
+        self.label_smoothing = label_smoothing
         self._probs: Array | None = None
         self._labels: Array | None = None
 
     def forward(self, logits: Array, labels: Array) -> float:
         self._probs = softmax(logits)
         self._labels = labels
-        picked = self._probs[np.arange(len(labels)), labels]
-        return float(-np.log(picked + 1e-12).mean())
+        log_probs = np.log(self._probs + 1e-12)
+        picked = log_probs[np.arange(len(labels)), labels]
+        if self.label_smoothing == 0.0:
+            return float(-picked.mean())
+        eps = self.label_smoothing
+        smooth_loss = -log_probs.mean(axis=1)
+        return float(((1.0 - eps) * (-picked) + eps * smooth_loss).mean())
 
     def backward(self) -> Array:
         if self._probs is None or self._labels is None:
             raise RuntimeError("backward() called before forward()")
+        n, k = self._probs.shape
         grad = self._probs.copy()
-        grad[np.arange(len(self._labels)), self._labels] -= 1.0
-        return grad / len(self._labels)
+        if self.label_smoothing == 0.0:
+            grad[np.arange(n), self._labels] -= 1.0
+        else:
+            eps = self.label_smoothing
+            grad -= eps / k
+            grad[np.arange(n), self._labels] -= 1.0 - eps
+        return grad / n
 
 
 class InfoNCELoss:

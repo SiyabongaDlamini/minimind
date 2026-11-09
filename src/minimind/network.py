@@ -9,7 +9,7 @@ import numpy as np
 
 from .layers import ACTIVATIONS, Dense, Dropout, Layer, LayerNorm
 from .losses import SoftmaxCrossEntropy, softmax
-from .optim import Optimizer, clip_grad_norm, make_optimizer
+from .optim import LRScheduler, Optimizer, clip_grad_norm, make_lr_scheduler, make_optimizer
 
 Array = np.ndarray
 History = dict[str, list[float]]
@@ -24,6 +24,7 @@ class NeuralNetwork:
         seed: int = 0,
         dropout: float = 0.0,
         layer_norm: bool = False,
+        label_smoothing: float = 0.0,
     ) -> None:
         sizes = tuple(int(s) for s in layer_sizes)
         if len(sizes) < 2 or any(s < 1 for s in sizes):
@@ -36,11 +37,12 @@ class NeuralNetwork:
         self.activation = activation
         self.dropout = dropout
         self.layer_norm = layer_norm
+        self.label_smoothing = label_smoothing
         self.meta: dict[str, Any] = {}
-        self._loss = SoftmaxCrossEntropy()
+        self._loss = SoftmaxCrossEntropy(label_smoothing=label_smoothing)
 
         rng = np.random.default_rng(seed)
-        init = "he" if activation in ("relu", "gelu") else "xavier"
+        init = "he" if activation in ("relu", "gelu", "silu", "leaky_relu") else "xavier"
         self.layers: list[Layer] = []
         for i, (n_in, n_out) in enumerate(zip(sizes[:-1], sizes[1:], strict=True)):
             self.layers.append(Dense(n_in, n_out, rng, init))
@@ -88,8 +90,11 @@ class NeuralNetwork:
         batch_size: int = 32,
         optimizer: str | Optimizer = "adam",
         lr: float = 0.01,
+        lr_schedule: str | LRScheduler | None = None,
         max_grad_norm: float = 0.0,
+        label_smoothing: float | None = None,
         validation: tuple[Array, Array] | None = None,
+        patience: int = 0,
         shuffle: bool = True,
         seed: int = 0,
         callbacks: Sequence[Callback] = (),
@@ -99,24 +104,42 @@ class NeuralNetwork:
         y = self._check_y(y, len(X))
         if epochs < 1 or batch_size < 1:
             raise ValueError("epochs and batch_size must be >= 1")
+        if patience < 0:
+            raise ValueError("patience must be >= 0")
         opt = make_optimizer(optimizer, lr)
+        base_lr = getattr(opt, "lr", lr)
+        scheduler = make_lr_scheduler(lr_schedule, base_lr, epochs)
+        loss_fn = (
+            self._loss
+            if label_smoothing is None
+            else SoftmaxCrossEntropy(label_smoothing=label_smoothing)
+        )
         params = [pg for layer in self.layers for pg in layer.parameters()]
         rng = np.random.default_rng(seed)
 
         history: History = {"loss": [], "accuracy": []}
         if validation is not None:
             history.update(val_loss=[], val_accuracy=[])
+        if scheduler is not None:
+            history["lr"] = []
         for cb in callbacks:
             cb(0, epochs, self, history)
 
+        best_val_loss = float("inf")
+        best_params: list[Array] | None = None
+        wait = 0
+
         n = len(X)
         for epoch in range(1, epochs + 1):
+            if scheduler is not None:
+                cur_lr = scheduler.step(opt, epoch, epochs)
+                history["lr"].append(cur_lr)
             order = rng.permutation(n) if shuffle else np.arange(n)
             for start in range(0, n, batch_size):
                 idx = order[start : start + batch_size]
                 logits = self.forward(X[idx], training=True)
-                self._loss.forward(logits, y[idx])
-                grad = self._loss.backward()
+                loss_fn.forward(logits, y[idx])
+                grad = loss_fn.backward()
                 for layer in reversed(self.layers):
                     grad = layer.backward(grad)
                 if max_grad_norm > 0.0:
@@ -130,6 +153,13 @@ class NeuralNetwork:
                 vloss, vacc = self.evaluate(*validation)
                 history["val_loss"].append(vloss)
                 history["val_accuracy"].append(vacc)
+                if patience > 0:
+                    if vloss < best_val_loss - 1e-8:
+                        best_val_loss = vloss
+                        best_params = [p.copy() for p, _ in params]
+                        wait = 0
+                    else:
+                        wait += 1
             if verbose and (epoch % verbose == 0 or epoch == epochs):
                 line = f"epoch {epoch:>4}/{epochs}  loss {loss:.4f}  acc {acc:.3f}"
                 if validation is not None:
@@ -137,6 +167,12 @@ class NeuralNetwork:
                 print(line)
             if any(cb(epoch, epochs, self, history) for cb in callbacks):
                 break
+            if patience > 0 and validation is not None and wait >= patience:
+                break
+
+        if best_params is not None:
+            for (p, _), saved in zip(params, best_params, strict=True):
+                p[...] = saved
         return history
 
     def get_weights(self) -> list[tuple[Array, Array]]:
@@ -156,23 +192,47 @@ class NeuralNetwork:
         arrays: dict[str, Array] = {
             "layer_sizes": np.array(self.layer_sizes),
             "activation": np.array(self.activation),
+            "dropout": np.array(self.dropout, dtype=float),
+            "layer_norm": np.array(self.layer_norm, dtype=bool),
+            "label_smoothing": np.array(self.label_smoothing, dtype=float),
             "meta": np.array(json.dumps(meta if meta is not None else self.meta)),
         }
         for i, (W, b) in enumerate(self.get_weights()):
             arrays[f"W{i}"], arrays[f"b{i}"] = W, b
+        for i, ln in enumerate(self._layer_norm_layers()):
+            arrays[f"LN_gamma{i}"] = ln.gamma.copy()
+            arrays[f"LN_beta{i}"] = ln.beta.copy()
         np.savez_compressed(Path(path), **arrays)
 
     @classmethod
     def load(cls, path: str | Path) -> NeuralNetwork:
         with np.load(Path(path), allow_pickle=False) as data:
-            net = cls(data["layer_sizes"].tolist(), activation=str(data["activation"]))
+            dropout = float(data["dropout"]) if "dropout" in data else 0.0
+            layer_norm = bool(data["layer_norm"]) if "layer_norm" in data else False
+            label_smoothing = (
+                float(data["label_smoothing"]) if "label_smoothing" in data else 0.0
+            )
+            net = cls(
+                data["layer_sizes"].tolist(),
+                activation=str(data["activation"]),
+                dropout=dropout,
+                layer_norm=layer_norm,
+                label_smoothing=label_smoothing,
+            )
             n_dense = len(net._dense_layers())
             net.set_weights([(data[f"W{i}"], data[f"b{i}"]) for i in range(n_dense)])
+            for i, ln in enumerate(net._layer_norm_layers()):
+                if f"LN_gamma{i}" in data and f"LN_beta{i}" in data:
+                    ln.gamma[...] = data[f"LN_gamma{i}"]
+                    ln.beta[...] = data[f"LN_beta{i}"]
             net.meta = json.loads(str(data["meta"]))
         return net
 
     def _dense_layers(self) -> list[Dense]:
         return [layer for layer in self.layers if isinstance(layer, Dense)]
+
+    def _layer_norm_layers(self) -> list[LayerNorm]:
+        return [layer for layer in self.layers if isinstance(layer, LayerNorm)]
 
     def _check_X(self, X: Array) -> Array:
         X = np.asarray(X, dtype=float)

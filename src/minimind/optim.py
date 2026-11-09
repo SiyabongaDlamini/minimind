@@ -94,3 +94,55 @@ def make_optimizer(spec: str | Optimizer, lr: float) -> Optimizer:
     if name == "adamw":
         return AdamW(lr=lr)
     raise ValueError(f"unknown optimizer {spec!r}; expected 'sgd', 'adam', or 'adamw'")
+
+
+class LRScheduler:
+    def get_lr(self, epoch: int, total_epochs: int) -> float:
+        raise NotImplementedError
+
+    def step(self, optimizer: Optimizer, epoch: int, total_epochs: int) -> float:
+        lr = self.get_lr(epoch, total_epochs)
+        optimizer.lr = lr  # type: ignore[attr-defined]
+        return lr
+
+
+class CosineAnnealingLR(LRScheduler):
+    def __init__(self, base_lr: float, min_lr: float = 0.0) -> None:
+        self.base_lr = base_lr
+        self.min_lr = min_lr
+
+    def get_lr(self, epoch: int, total_epochs: int) -> float:
+        if total_epochs <= 1:
+            return self.base_lr
+        progress = min(max(epoch - 1, 0) / (total_epochs - 1), 1.0)
+        return float(
+            self.min_lr + 0.5 * (self.base_lr - self.min_lr) * (1.0 + np.cos(np.pi * progress))
+        )
+
+
+class StepLR(LRScheduler):
+    def __init__(self, base_lr: float, step_size: int = 20, gamma: float = 0.5) -> None:
+        if step_size < 1:
+            raise ValueError("step_size must be >= 1")
+        self.base_lr = base_lr
+        self.step_size = step_size
+        self.gamma = gamma
+
+    def get_lr(self, epoch: int, total_epochs: int) -> float:
+        steps = max(epoch - 1, 0) // self.step_size
+        return float(self.base_lr * (self.gamma**steps))
+
+
+def make_lr_scheduler(
+    spec: str | LRScheduler | None,
+    base_lr: float,
+    total_epochs: int,
+) -> LRScheduler | None:
+    if spec is None or isinstance(spec, LRScheduler):
+        return spec
+    name = spec.lower()
+    if name == "cosine":
+        return CosineAnnealingLR(base_lr=base_lr, min_lr=base_lr * 0.01)
+    if name == "step":
+        return StepLR(base_lr=base_lr, step_size=max(1, total_epochs // 3), gamma=0.5)
+    raise ValueError(f"unknown lr_schedule {spec!r}; expected 'cosine', 'step', or None")

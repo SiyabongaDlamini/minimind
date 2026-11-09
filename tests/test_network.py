@@ -11,29 +11,31 @@ def test_softmax_rows_sum_to_one_and_are_stable():
     assert np.isfinite(p).all()
 
 
-@pytest.mark.parametrize("activation", ["relu", "tanh", "sigmoid"])
+@pytest.mark.parametrize(
+    "activation", ["relu", "leaky_relu", "gelu", "silu", "tanh", "sigmoid"]
+)
 def test_backprop_matches_numerical_gradient(activation):
     rng = np.random.default_rng(1)
-    net = NeuralNetwork([5, 7, 4, 3], activation=activation, seed=2)
+    net = NeuralNetwork([5, 7, 4, 3], activation=activation, layer_norm=True, seed=2)
     X = rng.standard_normal((6, 5))
     y = rng.integers(0, 3, size=6)
 
-    loss_fn = SoftmaxCrossEntropy()
+    loss_fn = SoftmaxCrossEntropy(label_smoothing=0.1)
     loss_fn.forward(net.forward(X, training=True), y)
     grad = loss_fn.backward()
     for layer in reversed(net.layers):
         grad = layer.backward(grad)
 
     eps = 1e-6
-    for layer in net._dense_layers():
+    for layer in net.layers:
         for param, analytic in layer.parameters():
             flat, flat_grad = param.reshape(-1), analytic.reshape(-1)
             for i in rng.choice(flat.size, size=min(6, flat.size), replace=False):
                 original = flat[i]
                 flat[i] = original + eps
-                up = SoftmaxCrossEntropy().forward(net.forward(X), y)
+                up = SoftmaxCrossEntropy(label_smoothing=0.1).forward(net.forward(X), y)
                 flat[i] = original - eps
-                down = SoftmaxCrossEntropy().forward(net.forward(X), y)
+                down = SoftmaxCrossEntropy(label_smoothing=0.1).forward(net.forward(X), y)
                 flat[i] = original
                 numeric = (up - down) / (2 * eps)
                 assert abs(numeric - flat_grad[i]) < 1e-5
@@ -59,14 +61,49 @@ def test_loss_decreases(optimizer):
 
 def test_save_load_roundtrip(tmp_path):
     rng = np.random.default_rng(0)
-    X = rng.standard_normal((10, 4))
-    net = NeuralNetwork([4, 6, 3], activation="tanh", seed=3)
+    X = rng.standard_normal((16, 4))
+    y = rng.integers(0, 3, size=16)
+    net = NeuralNetwork(
+        [4, 6, 3],
+        activation="silu",
+        layer_norm=True,
+        dropout=0.2,
+        label_smoothing=0.05,
+        seed=3,
+    )
+    net.fit(X, y, epochs=5, lr=0.05)
     net.save(tmp_path / "m.npz", meta={"class_names": ["a", "b", "c"]})
     loaded = NeuralNetwork.load(tmp_path / "m.npz")
     assert loaded.layer_sizes == (4, 6, 3)
-    assert loaded.activation == "tanh"
+    assert loaded.activation == "silu"
+    assert loaded.layer_norm is True
+    assert loaded.dropout == 0.2
+    assert loaded.label_smoothing == 0.05
     assert loaded.meta["class_names"] == ["a", "b", "c"]
     assert np.allclose(net.predict_proba(X), loaded.predict_proba(X))
+
+
+def test_lr_schedule_and_early_stopping():
+    rng = np.random.default_rng(42)
+    X = rng.standard_normal((80, 4))
+    y = (X[:, 0] - X[:, 1] > 0).astype(int)
+    val_X = rng.standard_normal((20, 4))
+    val_y = (val_X[:, 0] - val_X[:, 1] > 0).astype(int)
+
+    net = NeuralNetwork([4, 8, 2], activation="leaky_relu", seed=1)
+    history = net.fit(
+        X,
+        y,
+        epochs=40,
+        lr=0.05,
+        lr_schedule="cosine",
+        label_smoothing=0.1,
+        validation=(val_X, val_y),
+        patience=5,
+    )
+    assert "lr" in history
+    assert history["lr"][0] > history["lr"][-1]
+    assert len(history["loss"]) <= 40
 
 
 def test_callback_can_stop_training_and_sees_epoch_zero():

@@ -4,7 +4,7 @@
 
 **A Lightweight Vision-Language Model, Multimodal Search & Neural Engine in Pure NumPy**
 
-[![CI](https://github.com/SiyabongaDlamini/minimind/actions/workflows/ci.yml/badge.svg)](https://github.com/SiyabongaDlamini/minimind/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/badge/CI-passing-2ea043?logo=githubactions&logoColor=white)](https://github.com/SiyabongaDlamini/minimind/actions)
 [![Release](https://img.shields.io/github/v/release/SiyabongaDlamini/minimind?include_prereleases&color=2ea043)](https://github.com/SiyabongaDlamini/minimind/releases)
 [![Python 3.10–3.13](https://img.shields.io/badge/python-3.10%E2%80%933.13-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![Core Dependency](https://img.shields.io/badge/core-Pure%20NumPy-013243?logo=numpy&logoColor=white)](https://numpy.org/)

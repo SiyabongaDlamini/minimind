@@ -1,5 +1,3 @@
-"""Command line interface: ``minimind demo | train | predict | ask``."""
-
 from __future__ import annotations
 
 import argparse
@@ -11,6 +9,7 @@ import numpy as np
 from . import __version__
 from .data import Dataset, Standardizer
 from .network import NeuralNetwork
+from .vlm import VisionLanguageModel
 
 
 def _size(text: str) -> tuple[int, int]:
@@ -64,7 +63,6 @@ def _train_and_report(
     if recorder is not None:
         from .viz import animate_training
 
-        # Probe with a sample the trained network gets right, so the animation shows learning.
         correct = np.flatnonzero(net.predict(test.X) == test.y)
         probe = int(correct[0]) if correct.size else 0
         animate_training(
@@ -128,6 +126,42 @@ def _cmd_predict(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_vlm_train(args: argparse.Namespace) -> int:
+    vlm = VisionLanguageModel(
+        image_size=args.size,
+        hidden_dim=args.hidden_dim,
+        embed_dim=args.embed_dim,
+        seed=args.seed,
+    )
+    print(f"{vlm}  |  training on {args.images}")
+    history = vlm.fit_folder(
+        args.images,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        seed=args.seed,
+        verbose=max(1, args.epochs // 10),
+    )
+    final_align = history["alignment"][-1] if history["alignment"] else 0.0
+    print(f"final multimodal alignment: {final_align:.1%}")
+    vlm.save(args.out)
+    print(f"vlm saved to {args.out}")
+    return 0
+
+
+def _cmd_zero_shot(args: argparse.Namespace) -> int:
+    vlm = VisionLanguageModel.load(args.model)
+    labels = args.labels or vlm.meta.get("class_names", [])
+    if not labels:
+        print("provide --labels or use a model trained with class_names", file=sys.stderr)
+        return 2
+    for path in args.images:
+        scores = vlm.zero_shot_classify(path, labels, prompt_template=args.template)
+        top_str = ", ".join(f"{lbl} {prob:.0%}" for lbl, prob in scores[:3])
+        print(f"{path}: {scores[0][0]}  ({top_str})")
+    return 0
+
+
 def _cmd_ask(args: argparse.Namespace) -> int:
     from .knowledge import KnowledgeBase
 
@@ -161,7 +195,8 @@ def _cmd_ask(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="minimind", description="A small NumPy neural network with parsers and animations."
+        prog="minimind",
+        description="Lightweight Vision-Language Model & Neural Network Engine in pure NumPy.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -170,7 +205,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--epochs", type=int, default=60)
         p.add_argument("--lr", type=float, default=0.01)
         p.add_argument("--batch-size", type=int, default=32)
-        p.add_argument("--activation", choices=["relu", "tanh", "sigmoid"], default="relu")
+        p.add_argument("--activation", choices=["relu", "gelu", "tanh", "sigmoid"], default="relu")
         p.add_argument("--test-size", type=float, default=0.2)
         p.add_argument("--seed", type=int, default=0)
         p.add_argument("--animate", metavar="FILE.gif", help="save a training animation")
@@ -181,7 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument("--out", help="save the trained model (.npz)")
     demo.set_defaults(func=_cmd_demo)
 
-    train = sub.add_parser("train", help="train on your own images or CSV")
+    train = sub.add_parser("train", help="train a classifier on images or CSV")
     source = train.add_mutually_exclusive_group(required=True)
     source.add_argument("--images", help="folder with one subfolder of images per class")
     source.add_argument("--csv", help="CSV file with a header row")
@@ -197,6 +232,25 @@ def build_parser() -> argparse.ArgumentParser:
     predict.add_argument("model")
     predict.add_argument("images", nargs="+")
     predict.set_defaults(func=_cmd_predict)
+
+    vlm_train = sub.add_parser("vlm-train", help="train a contrastive vision-language model")
+    vlm_train.add_argument("--images", required=True, help="folder with class subfolders")
+    vlm_train.add_argument("--size", type=_size, default=(16, 16), help="image size HxW")
+    vlm_train.add_argument("--hidden-dim", type=int, default=128)
+    vlm_train.add_argument("--embed-dim", type=int, default=64)
+    vlm_train.add_argument("--epochs", type=int, default=40)
+    vlm_train.add_argument("--batch-size", type=int, default=16)
+    vlm_train.add_argument("--lr", type=float, default=0.005)
+    vlm_train.add_argument("--seed", type=int, default=0)
+    vlm_train.add_argument("--out", default="vlm.npz")
+    vlm_train.set_defaults(func=_cmd_vlm_train)
+
+    zero_shot = sub.add_parser("zero-shot", help="zero-shot classify images via text prompts")
+    zero_shot.add_argument("model", help="trained VLM (.npz)")
+    zero_shot.add_argument("images", nargs="+", help="image file paths")
+    zero_shot.add_argument("--labels", nargs="+", help="candidate text labels")
+    zero_shot.add_argument("--template", default="a photo of a {}")
+    zero_shot.set_defaults(func=_cmd_zero_shot)
 
     ask = sub.add_parser("ask", help="answer questions from your documents")
     ask.add_argument("documents", nargs="+", help="files or folders (txt, md, docx, pdf, ...)")

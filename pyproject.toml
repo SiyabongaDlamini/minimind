@@ -4,17 +4,26 @@ build-backend = "hatchling.build"
 
 [project]
 name = "minimind"
-version = "0.1.0"
-description = "A small, readable neural network in pure NumPy, with image/CSV parsers and live matplotlib training animations."
+version = "0.2.0"
+description = "Lightweight Vision-Language Model, Multimodal Search, and Neural Network Engine in pure NumPy."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [{ name = "Minimind contributors" }]
-keywords = ["neural-network", "numpy", "machine-learning", "education", "matplotlib"]
+keywords = [
+    "vision-language-model",
+    "vlm",
+    "multimodal",
+    "neural-network",
+    "numpy",
+    "machine-learning",
+    "zero-shot",
+    "rag",
+]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Education",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

@@ -1,5 +1,3 @@
-"""Dataset container and small preprocessing helpers."""
-
 from __future__ import annotations
 
 import math
@@ -12,15 +10,6 @@ Array = np.ndarray
 
 @dataclass
 class Dataset:
-    """Features, integer labels and the human-readable class names.
-
-    Attributes:
-        X: Feature matrix ``(n_samples, n_features)``.
-        y: Integer labels ``(n_samples,)`` indexing into ``class_names``.
-        class_names: Name of each class.
-        image_shape: ``(height, width)`` if each row is a flattened image, else ``None``.
-    """
-
     X: Array
     y: Array
     class_names: tuple[str, ...]
@@ -43,10 +32,7 @@ class Dataset:
     def n_classes(self) -> int:
         return len(self.class_names)
 
-    def split(
-        self, test_size: float = 0.2, seed: int = 0
-    ) -> tuple[Dataset, Dataset]:
-        """Stratified train/test split that keeps class proportions."""
+    def split(self, test_size: float = 0.2, seed: int = 0) -> tuple[Dataset, Dataset]:
         if not 0.0 < test_size < 1.0:
             raise ValueError("test_size must be between 0 and 1")
         rng = np.random.default_rng(seed)
@@ -64,8 +50,6 @@ class Dataset:
 
 
 class Standardizer:
-    """Scale each feature to zero mean and unit variance using training statistics."""
-
     def __init__(self) -> None:
         self.mean: Array | None = None
         self.std: Array | None = None

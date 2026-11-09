@@ -1,11 +1,3 @@
-"""Matplotlib animation of a network learning (requires the ``viz`` extra).
-
-Record training with :class:`TrainingRecorder`, then render it with
-:func:`animate_training`. The animation shows the network's weights changing (orange =
-positive, blue = negative), the activations for one probe sample, the output
-probabilities and the loss / accuracy curves.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -25,13 +17,6 @@ ACCENT, NEGATIVE, GOOD = "#e8944a", "#5aa9e6", "#4ade80"
 
 @dataclass
 class TrainingRecorder:
-    """Training callback that snapshots the weights for later animation.
-
-    Args:
-        every: Record one frame every ``every`` epochs (epoch 0 and the last epoch are
-            always recorded).
-    """
-
     every: int = 1
     epochs: list[int] = field(default_factory=list)
     snapshots: list[list[tuple[Array, Array]]] = field(default_factory=list)
@@ -64,32 +49,13 @@ def animate_training(
     max_nodes: int = 16,
     dpi: int = 80,
 ):
-    """Build (and optionally save) the training animation.
-
-    Args:
-        net: The trained network; used as scratch space. Its weights are restored after
-            saving; if you only show the animation, snapshot with ``net.get_weights()`` first.
-        recorder: A recorder that was passed to ``fit(callbacks=[recorder])``.
-        history: The history returned by ``fit``.
-        probe: One feature vector to push through the network in every frame.
-        probe_label: Optional true label shown above the probe.
-        image_shape: ``(h, w)`` to display the probe as an image.
-        class_names: Names for the output neurons.
-        save_path: ``.gif`` (uses Pillow) or any format matplotlib can write.
-        fps: Frames per second.
-        max_nodes: Maximum neurons drawn per layer (evenly sampled for wider layers).
-        dpi: Output resolution.
-
-    Returns:
-        The ``matplotlib.animation.FuncAnimation``. Keep a reference to it if you show it.
-    """
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation, PillowWriter
     from matplotlib.collections import LineCollection
+    from matplotlib.colors import to_rgba
 
     if not recorder.snapshots:
         raise ValueError("the recorder is empty; pass it to fit(callbacks=[recorder])")
-    from matplotlib.colors import to_rgba
 
     POS_RGBA, NEG_RGBA = np.array(to_rgba(ACCENT)), np.array(to_rgba(NEGATIVE))
     probe = np.asarray(probe, dtype=float).ravel()
@@ -111,7 +77,6 @@ def animate_training(
             spine.set_color("#26262c")
     fig.suptitle(title, color=TEXT, fontsize=14, fontweight="bold", x=0.04, ha="left")
 
-    # --- probe image
     ax_img.set_xticks([])
     ax_img.set_yticks([])
     if image_shape and probe.size == image_shape[0] * image_shape[1]:
@@ -122,7 +87,6 @@ def animate_training(
         f"probe · label {probe_label}" if probe_label else "probe", color=DIM, fontsize=9
     )
 
-    # --- network geometry (fixed); colours are updated every frame
     shown = [np.unique(np.linspace(0, s - 1, min(s, max_nodes)).round().astype(int)) for s in sizes]
     xs = np.linspace(0.05, 0.95, len(sizes))
     node_xy, layer_slices, start = [], [], 0
@@ -151,7 +115,6 @@ def animate_training(
         ax_net.text(x, -0.02, str(size), ha="center", va="top", color=DIM, fontsize=8)
     hud = ax_net.text(0.01, 1.02, "", color=ACCENT, fontsize=9, family="monospace")
 
-    # --- output probabilities
     bars = ax_out.barh(range(len(names)), np.zeros(len(names)), color=DIM)
     ax_out.set_xlim(0, 1)
     ax_out.set_ylim(len(names) - 0.4, -0.6)
@@ -161,7 +124,6 @@ def animate_training(
     ax_out.tick_params(axis="y", length=0)
     ax_out.set_title("output probability", color=DIM, fontsize=9)
 
-    # --- curves
     epochs_axis = np.arange(1, len(history["loss"]) + 1)
     (loss_line,) = ax_curve.plot([], [], color=ACCENT, lw=1.6, label="loss")
     ax_acc = ax_curve.twinx()

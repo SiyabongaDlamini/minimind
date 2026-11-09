@@ -1,14 +1,3 @@
-"""Answer questions from your own documents.
-
-This is *retrieval*, not generation: documents are split into passages, indexed with
-TF-IDF vectors (pure NumPy), and a question is answered with the most relevant
-sentences from your files, together with where they came from. Nothing is ever made
-up; if the documents do not contain a good match, the answer says so.
-
-Supported inputs: plain text (``.txt``, ``.md``, ``.rst``, ``.csv``, ``.json``, ``.log``),
-Word ``.docx`` (standard library only) and ``.pdf`` (needs ``pypdf``).
-"""
-
 from __future__ import annotations
 
 import json
@@ -41,9 +30,7 @@ _HEADING = re.compile(r"^(#{1,6}\s.*)$", re.MULTILINE)
 _SENTENCE = re.compile(r"(?<=[.!?])\s+|\n{2,}|\n(?=[-*•\d])")
 
 
-# --------------------------------------------------------------------------- reading
 def read_document(path: str | Path) -> str:
-    """Extract plain text from a supported file."""
     path = Path(path)
     suffix = path.suffix.lower()
     if not path.is_file():
@@ -85,9 +72,7 @@ def _read_pdf(path: Path) -> str:
     return text
 
 
-# ------------------------------------------------------------------------- chunking
 def tokenize(text: str) -> list[str]:
-    """Lowercase word tokens without stopwords, with light plural/suffix stemming."""
     tokens = []
     for word in _WORD.findall(text.lower()):
         if word in _STOPWORDS:
@@ -101,20 +86,11 @@ def tokenize(text: str) -> list[str]:
 
 
 def split_sentences(text: str) -> list[str]:
-    """Split text into sentences / list items, dropping empty fragments.
-
-    Markdown headings (``# Title``) become their own fragment instead of being glued to
-    the sentence that follows them.
-    """
     text = _HEADING.sub(r"\1\n\n", text)
     return [s.strip() for s in _SENTENCE.split(text) if s and s.strip()]
 
 
 def chunk_text(text: str, max_words: int = 90) -> list[str]:
-    """Group consecutive sentences into passages of roughly ``max_words`` words.
-
-    Sentences are joined with blank lines so :func:`split_sentences` recovers them exactly.
-    """
     chunks: list[str] = []
     current: list[str] = []
     count = 0
@@ -130,11 +106,8 @@ def chunk_text(text: str, max_words: int = 90) -> list[str]:
     return chunks
 
 
-# ------------------------------------------------------------------------ the index
 @dataclass(frozen=True)
 class Passage:
-    """A piece of a source document and how well it matched a question."""
-
     source: str
     text: str
     score: float
@@ -142,8 +115,6 @@ class Passage:
 
 @dataclass(frozen=True)
 class Answer:
-    """The reply to a question: best sentences plus the passages they came from."""
-
     text: str
     confidence: float
     passages: tuple[Passage, ...]
@@ -157,17 +128,10 @@ class Answer:
 
 
 class KnowledgeBase:
-    """Index documents and answer questions from them.
-
-    Args:
-        max_words: Target passage length when splitting documents.
-        min_score: Cosine similarity below which a question counts as unanswered.
-    """
-
     def __init__(self, max_words: int = 90, min_score: float = 0.12) -> None:
         self.max_words = max_words
         self.min_score = min_score
-        self._chunks: list[tuple[str, str]] = []  # (source, text)
+        self._chunks: list[tuple[str, str]] = []
         self._vocab: dict[str, int] = {}
         self._idf: Array = np.zeros(0)
         self._matrix: Array = np.zeros((0, 0))
@@ -180,24 +144,17 @@ class KnowledgeBase:
     def sources(self) -> list[str]:
         return list(dict.fromkeys(src for src, _ in self._chunks))
 
-    # ----------------------------------------------------------------- ingestion
     def add_text(self, text: str, source: str = "text") -> int:
-        """Add raw text; returns how many passages were created."""
         chunks = chunk_text(text, self.max_words)
         self._chunks.extend((source, c) for c in chunks)
         self._dirty = self._dirty or bool(chunks)
         return len(chunks)
 
     def add_file(self, path: str | Path) -> int:
-        """Read and add one document; returns how many passages were created."""
         path = Path(path)
         return self.add_text(read_document(path), source=path.name)
 
     def add_paths(self, paths: Iterable[str | Path]) -> dict[str, int]:
-        """Add files and folders (searched recursively). Unsupported files are skipped.
-
-        Returns a mapping of file name to passages added (``-1`` for skipped files).
-        """
         report: dict[str, int] = {}
         for raw in paths:
             raw = Path(raw)
@@ -209,9 +166,7 @@ class KnowledgeBase:
                     report[f.name] = -1
         return report
 
-    # ----------------------------------------------------------------- retrieval
     def search(self, question: str, k: int = 3) -> list[Passage]:
-        """Return the ``k`` passages most similar to ``question`` (best first)."""
         if not self._chunks:
             return []
         self._build()
@@ -227,7 +182,6 @@ class KnowledgeBase:
         ]
 
     def ask(self, question: str, k: int = 3, max_sentences: int = 3) -> Answer:
-        """Answer ``question`` with the most relevant sentences from the documents."""
         if not self._chunks:
             return Answer("No documents have been added yet.", 0.0, (), False)
         passages = self.search(question, k)
@@ -246,9 +200,7 @@ class KnowledgeBase:
         used = tuple(dict.fromkeys(candidates[i][1] for i in chosen))
         return Answer(text, passages[0].score, used or tuple(passages), True)
 
-    # --------------------------------------------------------------- persistence
     def save(self, path: str | Path) -> None:
-        """Save the passages as JSON (the index is rebuilt on load)."""
         payload = {
             "max_words": self.max_words,
             "min_score": self.min_score,
@@ -264,7 +216,6 @@ class KnowledgeBase:
         kb._dirty = bool(kb._chunks)
         return kb
 
-    # ------------------------------------------------------------------ internals
     def _build(self) -> None:
         if not self._dirty:
             return

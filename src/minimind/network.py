@@ -1,5 +1,3 @@
-"""A small multilayer perceptron classifier implemented in pure NumPy."""
-
 from __future__ import annotations
 
 import json
@@ -9,31 +7,23 @@ from typing import Any
 
 import numpy as np
 
-from .layers import ACTIVATIONS, Dense, Layer
+from .layers import ACTIVATIONS, Dense, Dropout, Layer, LayerNorm
 from .losses import SoftmaxCrossEntropy, softmax
-from .optim import Optimizer, make_optimizer
+from .optim import Optimizer, clip_grad_norm, make_optimizer
 
 Array = np.ndarray
 History = dict[str, list[float]]
-# callback(epoch, total_epochs, network, history) -> True to stop training early.
-# It is called once with epoch 0 (before any training) and then after every epoch.
 Callback = Callable[[int, int, "NeuralNetwork", History], "bool | None"]
 
 
 class NeuralNetwork:
-    """Fully connected softmax classifier.
-
-    Args:
-        layer_sizes: Sizes from input to output, e.g. ``[64, 32, 10]``.
-        activation: Hidden activation: ``'relu'``, ``'tanh'`` or ``'sigmoid'``.
-        seed: Seed for weight initialisation.
-    """
-
     def __init__(
         self,
         layer_sizes: Sequence[int],
         activation: str = "relu",
         seed: int = 0,
+        dropout: float = 0.0,
+        layer_norm: bool = False,
     ) -> None:
         sizes = tuple(int(s) for s in layer_sizes)
         if len(sizes) < 2 or any(s < 1 for s in sizes):
@@ -44,56 +34,51 @@ class NeuralNetwork:
             )
         self.layer_sizes = sizes
         self.activation = activation
+        self.dropout = dropout
+        self.layer_norm = layer_norm
         self.meta: dict[str, Any] = {}
         self._loss = SoftmaxCrossEntropy()
 
         rng = np.random.default_rng(seed)
-        init = "he" if activation == "relu" else "xavier"
+        init = "he" if activation in ("relu", "gelu") else "xavier"
         self.layers: list[Layer] = []
         for i, (n_in, n_out) in enumerate(zip(sizes[:-1], sizes[1:], strict=True)):
             self.layers.append(Dense(n_in, n_out, rng, init))
             if i < len(sizes) - 2:
+                if layer_norm:
+                    self.layers.append(LayerNorm(n_out))
                 self.layers.append(ACTIVATIONS[activation]())
+                if dropout > 0.0:
+                    self.layers.append(Dropout(dropout, seed=seed + i + 1))
 
-    # ------------------------------------------------------------------ inference
     def forward(self, X: Array, training: bool = False) -> Array:
-        """Return the raw logits for ``X`` with shape ``(n_samples, n_classes)``."""
         out = self._check_X(X)
         for layer in self.layers:
             out = layer.forward(out, training)
         return out
 
     def predict_proba(self, X: Array) -> Array:
-        """Class probabilities for each row of ``X``."""
         return softmax(self.forward(X))
 
     def predict(self, X: Array) -> Array:
-        """Most likely class index for each row of ``X``."""
         return self.forward(X).argmax(axis=1)
 
     def evaluate(self, X: Array, y: Array) -> tuple[float, float]:
-        """Return ``(loss, accuracy)`` on ``(X, y)``."""
         y = self._check_y(y, len(X))
         logits = self.forward(X)
         loss = SoftmaxCrossEntropy().forward(logits, y)
         return loss, float((logits.argmax(axis=1) == y).mean())
 
     def forward_trace(self, x: Array) -> list[Array]:
-        """Activations at every layer boundary for one sample (used by the visualiser).
-
-        Returns ``[input, hidden_1, ..., hidden_n, probabilities]``, each of shape
-        ``(1, size)``.
-        """
         out = self._check_X(np.atleast_2d(x))
         trace = [out]
         for layer in self.layers:
             out = layer.forward(out, training=False)
-            if not isinstance(layer, Dense):
+            if isinstance(layer, tuple(ACTIVATIONS.values())):
                 trace.append(out)
         trace.append(softmax(out))
         return trace
 
-    # ------------------------------------------------------------------- training
     def fit(
         self,
         X: Array,
@@ -103,27 +88,13 @@ class NeuralNetwork:
         batch_size: int = 32,
         optimizer: str | Optimizer = "adam",
         lr: float = 0.01,
+        max_grad_norm: float = 0.0,
         validation: tuple[Array, Array] | None = None,
         shuffle: bool = True,
         seed: int = 0,
         callbacks: Sequence[Callback] = (),
         verbose: int = 0,
     ) -> History:
-        """Train with mini-batch gradient descent and return the metric history.
-
-        Args:
-            X: Features, shape ``(n_samples, n_features)``.
-            y: Integer class labels, shape ``(n_samples,)``.
-            epochs: Number of passes over the data.
-            batch_size: Mini-batch size.
-            optimizer: ``'adam'``, ``'sgd'`` or an :class:`~minimind.optim.Optimizer`.
-            lr: Learning rate when ``optimizer`` is given by name.
-            validation: Optional ``(X_val, y_val)`` evaluated after every epoch.
-            shuffle: Reshuffle the training data every epoch.
-            seed: Seed for shuffling.
-            callbacks: Functions called after each epoch; see :data:`Callback`.
-            verbose: Print a progress line every ``verbose`` epochs (0 = silent).
-        """
         X = self._check_X(X)
         y = self._check_y(y, len(X))
         if epochs < 1 or batch_size < 1:
@@ -148,6 +119,8 @@ class NeuralNetwork:
                 grad = self._loss.backward()
                 for layer in reversed(self.layers):
                     grad = layer.backward(grad)
+                if max_grad_norm > 0.0:
+                    clip_grad_norm(params, max_grad_norm)
                 opt.step(params)
 
             loss, acc = self.evaluate(X, y)
@@ -166,13 +139,10 @@ class NeuralNetwork:
                 break
         return history
 
-    # ---------------------------------------------------------------- persistence
     def get_weights(self) -> list[tuple[Array, Array]]:
-        """Copies of ``(W, b)`` for every dense layer."""
         return [(d.W.copy(), d.b.copy()) for d in self._dense_layers()]
 
     def set_weights(self, weights: Sequence[tuple[Array, Array]]) -> None:
-        """Load weights produced by :meth:`get_weights`."""
         dense = self._dense_layers()
         if len(weights) != len(dense):
             raise ValueError("weight list does not match the number of dense layers")
@@ -183,7 +153,6 @@ class NeuralNetwork:
             layer.b[...] = b
 
     def save(self, path: str | Path, meta: dict[str, Any] | None = None) -> None:
-        """Save architecture, weights and optional JSON-serialisable ``meta`` to ``.npz``."""
         arrays: dict[str, Array] = {
             "layer_sizes": np.array(self.layer_sizes),
             "activation": np.array(self.activation),
@@ -195,7 +164,6 @@ class NeuralNetwork:
 
     @classmethod
     def load(cls, path: str | Path) -> NeuralNetwork:
-        """Load a network written by :meth:`save` (no pickle is used)."""
         with np.load(Path(path), allow_pickle=False) as data:
             net = cls(data["layer_sizes"].tolist(), activation=str(data["activation"]))
             n_dense = len(net._dense_layers())
@@ -203,7 +171,6 @@ class NeuralNetwork:
             net.meta = json.loads(str(data["meta"]))
         return net
 
-    # -------------------------------------------------------------------- helpers
     def _dense_layers(self) -> list[Dense]:
         return [layer for layer in self.layers if isinstance(layer, Dense)]
 

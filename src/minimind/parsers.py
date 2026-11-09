@@ -1,10 +1,3 @@
-"""Parsers that turn images and tabular files into :class:`~minimind.data.Dataset` rows.
-
-The image parser is built for scans and photos of documents: it converts to
-grayscale, flips dark-ink-on-light-paper into the bright-ink convention used by
-datasets like MNIST, stretches contrast, crops to the content and resizes.
-"""
-
 from __future__ import annotations
 
 import csv
@@ -25,30 +18,19 @@ IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".
 def _pil():
     try:
         from PIL import Image
-    except ImportError as exc:  # pragma: no cover
+    except ImportError as exc:
         raise ImportError("image parsing needs Pillow: pip install 'minimind[image]'") from exc
     return Image
 
 
 @dataclass(frozen=True)
 class ImageParser:
-    """Convert an image into a flat feature vector in ``[0, 1]``.
-
-    Args:
-        size: Output ``(height, width)``.
-        invert: ``True`` always inverts, ``False`` never, ``None`` detects it from the
-            border brightness (light background -> invert so ink becomes bright).
-        crop: Crop to the bounding box of the content before resizing.
-        margin: Padding around the cropped content, as a fraction of its size.
-    """
-
     size: tuple[int, int] = (8, 8)
     invert: bool | None = None
     crop: bool = True
     margin: float = 0.1
 
     def parse(self, source: str | Path | Array | Any) -> Array:
-        """Parse a file path, ``PIL.Image`` or ``numpy`` array into a vector."""
         gray = self._to_gray(source)
         if self._should_invert(gray):
             gray = 1.0 - gray
@@ -59,13 +41,11 @@ class ImageParser:
         return self._resize(gray).ravel()
 
     def parse_many(self, sources: Iterable[Any]) -> Array:
-        """Parse several sources into an ``(n, height * width)`` matrix."""
         rows = [self.parse(s) for s in sources]
         if not rows:
             raise ValueError("no images to parse")
         return np.stack(rows)
 
-    # ---------------------------------------------------------------- internals
     def _to_gray(self, source: Any) -> Array:
         Image = _pil()
         if isinstance(source, (str, Path)):
@@ -96,9 +76,10 @@ class ImageParser:
         crop = gray[rows.min() : rows.max() + 1, cols.min() : cols.max() + 1]
         h, w = crop.shape
         target_ratio = self.size[1] / self.size[0]
-        new_h, new_w = (h, math.ceil(h * target_ratio)) if w / h < target_ratio else (
-            math.ceil(w / target_ratio),
-            w,
+        new_h, new_w = (
+            (h, math.ceil(h * target_ratio))
+            if w / h < target_ratio
+            else (math.ceil(w / target_ratio), w)
         )
         pad_h, pad_w = round(self.margin * new_h), round(self.margin * new_w)
         out = np.zeros((new_h + 2 * pad_h, new_w + 2 * pad_w))
@@ -117,7 +98,6 @@ def load_image_folder(
     root: str | Path,
     parser: ImageParser | None = None,
 ) -> Dataset:
-    """Load ``root/<class_name>/*.png`` style folders; each subfolder is one class."""
     root = Path(root)
     parser = parser or ImageParser()
     if not root.is_dir():
@@ -147,11 +127,6 @@ def load_csv(
     target: str | int = -1,
     delimiter: str = ",",
 ) -> Dataset:
-    """Load a CSV with a header row; ``target`` is a column name or index (default: last).
-
-    Feature columns must be numeric. Labels may be text; they are mapped to integer
-    classes in sorted order.
-    """
     path = Path(path)
     with path.open(newline="", encoding="utf-8-sig") as fh:
         rows = [r for r in csv.reader(fh, delimiter=delimiter) if r]
